@@ -1,24 +1,37 @@
-﻿using System;
+﻿using OxyPlot;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Windows;
+using System.Windows.Controls.DataVisualization.Charting;
+using System.Windows.Media;
+using System.Windows.Xps.Serialization;
 
 namespace WPFTA
 {
     class ApplicationViewModel : INotifyPropertyChanged
     {
-        private UserDay selectedPhone;
-
+        private KeyValuePair<string, PageInfo> selected;
+        public int count = 1;
+        public int count2 = 1;
         IFileService fileService;
         IDialogService dialogService;
 
+        public Dictionary<string, ObservableCollection<UserDay>> Users { get; set; } = 
+            new Dictionary<string, ObservableCollection<UserDay>>();
 
-        public ObservableCollection<UserDay> Phones { get; set; }
+        public Dictionary<string, PageInfo> Info { get; set; } =
+            new Dictionary<string, PageInfo>();
+        public ObservableCollection<UserDay> UserFile { get; set; }
 
         private RelayCommand saveCommand;
+        private List<Point> points = new List<Point>();
+
         public RelayCommand SaveCommand
         {
             get
@@ -30,7 +43,7 @@ namespace WPFTA
                       {
                           if (dialogService.SaveFileDialog() == true)
                           {
-                              fileService.Save(dialogService.FilePath, Phones.ToList());
+                              fileService.Save(dialogService.FilePath, UserFile.ToList());
                               dialogService.ShowMessage("Файл сохранен");
                           }
                       }
@@ -42,74 +55,22 @@ namespace WPFTA
             }
         }
 
-        private RelayCommand openCommand;
-        public RelayCommand OpenCommand
+        public KeyValuePair<string, PageInfo> Selected
         {
-            get
-            {
-                return openCommand ??
-                  (openCommand = new RelayCommand(obj =>
-                  {
-                      try
-                      {
-                          if (dialogService.OpenFileDialog() == true)
-                          {
-                              var phones = fileService.Open(dialogService.FilePath);
-                              Phones.Clear();
-                              foreach (var p in phones)
-                                  Phones.Add(p);
-                              dialogService.ShowMessage("Файл открыт");
-                          }
-                      }
-                      catch (Exception ex)
-                      {
-                          dialogService.ShowMessage(ex.Message);
-                      }
-                  }));
-            }
-        }
-
-
-        private RelayCommand addCommand;
-        public RelayCommand AddCommand
-        {
-            get
-            {
-                return addCommand ??
-                  (addCommand = new RelayCommand(obj =>
-                  {
-                      UserDay phone = new UserDay();
-                      Phones.Insert(0, phone);
-                      SelectedPhone = phone;
-                  }));
-            }
-        }
-
-        // команда удаления
-        private RelayCommand removeCommand;
-        public RelayCommand RemoveCommand
-        {
-            get
-            {
-                return removeCommand ??
-                  (removeCommand = new RelayCommand(obj =>
-                  {
-                      UserDay phone = obj as UserDay;
-                      if (phone != null)
-                      {
-                          Phones.Remove(phone);
-                      }
-                  },
-                 (obj) => Phones.Count > 0));
-            }
-        }
-
-        public UserDay SelectedPhone
-        {
-            get { return selectedPhone; }
+            get { return selected; }
             set
             {
-                selectedPhone = value;
+                selected = value;
+                OnPropertyChanged("SelectedPhone");
+            }
+        }
+
+        public List<Point> Points
+        {
+            get { return points; }
+            set
+            {
+                points = value;
                 OnPropertyChanged("SelectedPhone");
             }
         }
@@ -118,14 +79,48 @@ namespace WPFTA
         {
             this.dialogService = dialogService;
             this.fileService = fileService;
+            // Only get files that begin with the letter "c".
+            string[] dirs = Directory.GetFiles(@"files\", "day*");
 
-            Phones = new ObservableCollection<UserDay>
+            foreach (string dir in dirs)
             {
-                new UserDay { Title="iPhone 7", Company="Apple", Price=56000 },
-                new UserDay { Title="Galaxy S7 Edge", Company="Samsung", Price =60000 },
-                new UserDay { Title="Elite x3", Company="HP", Price=56000 },
-                new UserDay { Title="Mi5S", Company="Xiaomi", Price=35000 }
-            };
+                var userfile = fileService.Open(dir);
+                foreach (var p in userfile)
+                    if (!Users.ContainsKey(p.User))
+                        Users.Add(p.User, new ObservableCollection<UserDay>());
+                    else
+                        Users[p.User].Add(p);
+            }
+            double sum;
+            double average;
+            int best;
+            int worst;
+            foreach (var c in Users)
+            {
+                best = 0;
+                worst = 1000000000;
+                sum = 0;
+                foreach (var o in c.Value)
+                {
+                    if (best < o.Steps)
+                        best = o.Steps;
+                    if (worst > o.Steps)
+                        worst = o.Steps;
+                    sum += o.Steps;
+                    average = sum / c.Value.Count;
+                }
+                average = sum / c.Value.Count;
+
+                Info.Add(c.Key, new PageInfo(average, best, worst));
+            }
+            if (!selected.Equals(default(KeyValuePair<string, PageInfo>)))
+                foreach (UserDay c in Users[selected.Key])
+                {
+                    points.Add(new Point(count, c.Steps));
+                    Console.WriteLine(c.Steps);
+                    count++;
+                }
+            count = 1;
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

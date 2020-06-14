@@ -23,8 +23,6 @@ namespace WPFTA
         public MainWindow()
         {
             InitializeComponent();
-
-            InitializeComponent();
             DataContext =
                 new ApplicationViewModel(new DefaultDialogService(), new JsonFileService());
         }
